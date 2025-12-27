@@ -49,7 +49,7 @@ export interface MessageWithSender {
 
 export class ConversationService {
   // Find or create a conversation between two users
-  static async findOrCreateConversation(user1Id: string, user2Id: string): Promise<Conversation> {
+  static async findOrCreateConversation(user1Id: string, user2Id: string): Promise<Conversation | undefined> {
     // Ensure consistent ordering (smaller ID first)
     const [firstUserId, secondUserId] = user1Id < user2Id ? [user1Id, user2Id] : [user2Id, user1Id];
 
@@ -61,11 +61,7 @@ export class ConversationService {
     let result = await runQuery(query, [firstUserId, secondUserId]);
 
     if ((result.rows as Conversation[]).length > 0) {
-      const conversation = (result.rows as Conversation[])[0];
-      if (!conversation) {
-        throw new Error('Failed to find conversation');
-      }
-      return conversation;
+      return (result.rows as Conversation[])[0];
     }
 
     // Create new conversation
@@ -241,7 +237,9 @@ export class ConversationService {
     
     // Create or find conversation
     const conversation = await this.findOrCreateConversation(userId, targetUser.id);
-    
+    if (!conversation) {
+      throw new Error('Failed to create or find conversation');
+    }
     return { conversation, targetUser };
   }
 

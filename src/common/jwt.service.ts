@@ -4,11 +4,13 @@ import crypto from 'crypto';
 interface TokenPayload extends jwt.JwtPayload {
   userId: string;
   email: string;
+  tenantId: string;
 }
 
 interface RefreshTokenPayload extends jwt.JwtPayload {
   userId: string;
   tokenId: string;
+  tenantId: string;
 }
 
 export class JWTService {
@@ -32,11 +34,11 @@ export class JWTService {
     );
   }
 
-  static generateRefreshToken(userId: string): { token: string; tokenId: string } {
+  static generateRefreshToken(userId: string, tenantId: string): { token: string; tokenId: string } {
     const tokenId = crypto.randomUUID();
 
     const token = (jwt as any).sign(
-      { userId, tokenId },
+      { userId, tokenId, tenantId },
       this.REFRESH_TOKEN_SECRET,
       {
         expiresIn: this.REFRESH_TOKEN_EXPIRY,
@@ -71,13 +73,14 @@ export class JWTService {
     }
   }
 
-  static generateTokenPair(user: { id: string; email: string }) {
+  static generateTokenPair(user: { id: string; email: string; tenant_id: string }) {
     const accessToken = this.generateAccessToken({
       userId: user.id,
-      email: user.email
+      email: user.email,
+      tenantId: user.tenant_id
     });
 
-    const { token: refreshToken, tokenId } = this.generateRefreshToken(user.id);
+    const { token: refreshToken, tokenId } = this.generateRefreshToken(user.id, user.tenant_id);
 
     return {
       accessToken,

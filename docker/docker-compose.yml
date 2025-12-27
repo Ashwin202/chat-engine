@@ -1,16 +1,17 @@
 version: '3.9'
-# use postgres:13 image for the database
+# use mariadb:10.6 image for the database
 services:
   db:
-    image: postgres:13
+    image: mariadb:10.6
     environment:
-      POSTGRES_DB: guest
-      POSTGRES_USER: guest
-      POSTGRES_PASSWORD: guest
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: chat_engine
+      MYSQL_USER: chat_user
+      MYSQL_PASSWORD: chat_password
     ports:
-      - "5433:5432"
+      - "3307:3306"
     volumes:
-      - mysqldata:/var/lib/postgresql/data
+      - mariadbdata:/var/lib/mysql
     networks:
       - chat-engine-network
 
@@ -25,7 +26,7 @@ services:
       - chat-engine-network
 
 volumes:
-  mysqldata:
+  mariadbdata:
   redis-data:
 
 networks:

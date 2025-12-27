@@ -101,7 +101,7 @@ export const registerSocketEvents = (io: Server) => {
 
         // Mark message as delivered for online users
         setTimeout(async () => {
-          await ConversationService.markMessageDelivered(message.id);
+          await ConversationService.markMessageAsDelivered(message.id);
           io.to(`conversation:${conversationId}`).emit('message_status_update', {
             messageId: message.id,
             status: 'delivered'

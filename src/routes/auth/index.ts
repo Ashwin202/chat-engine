@@ -7,20 +7,24 @@ import {
     logoutAllRoute, 
     getMeRoute,
     changePasswordRoute
-} from './controller';
+} from './multiTenantController';
 import { authenticateToken } from '../../middleware/auth.middleware';
+import { extractTenant, requireTenant } from '../../middleware/tenant.middleware';
 
 const router = Router();
 
-// Public routes
-router.post('/register', registerUserRoute);
-router.post('/login', loginRoute);
-router.post('/refresh', refreshTokenRoute);
+// Apply tenant extraction middleware to all routes
+router.use(extractTenant);
+
+// Public routes (tenant optional for some, required for others)
+router.post('/register', requireTenant, registerUserRoute);
+router.post('/login', requireTenant, loginRoute);
+router.post('/refresh', requireTenant, refreshTokenRoute);
 
 // Protected routes
-router.post('/logout', authenticateToken, logoutRoute);
-router.post('/logout-all', authenticateToken, logoutAllRoute);
-router.get('/me', authenticateToken, getMeRoute);
-router.put('/change-password', authenticateToken, changePasswordRoute);
+router.post('/logout', requireTenant, authenticateToken, logoutRoute);
+router.post('/logout-all', requireTenant, authenticateToken, logoutAllRoute);
+router.get('/me', requireTenant, authenticateToken, getMeRoute);
+router.put('/change-password', requireTenant, authenticateToken, changePasswordRoute);
 
 export default router;

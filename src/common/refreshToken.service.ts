@@ -27,8 +27,8 @@ export class RefreshTokenService {
     expiresAt.setDate(expiresAt.getDate() + expiresInDays);
 
     const query = `
-      INSERT INTO refresh_tokens (token_id, user_id, token_hash, expires_at)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO refresh_tokens (id, token_id, user_id, token_hash, expires_at)
+      VALUES (UUID(), ?, ?, ?, ?)
     `;
 
     await runQuery(query, [tokenId, userId, tokenHash, expiresAt]);
@@ -39,18 +39,18 @@ export class RefreshTokenService {
     
     const query = `
       SELECT * FROM refresh_tokens
-      WHERE token_id = $1 AND token_hash = $2 AND is_revoked = FALSE AND expires_at > NOW()
+      WHERE token_id = ? AND token_hash = ? AND is_revoked = FALSE AND expires_at > NOW()
     `;
 
     const result = await runQuery(query, [tokenId, tokenHash]);
-    return result.rows[0] || null;
+    return (result.rows as RefreshTokenRecord[])[0] || null;
   }
 
   static async revokeRefreshToken(tokenId: string): Promise<void> {
     const query = `
       UPDATE refresh_tokens
       SET is_revoked = TRUE
-      WHERE token_id = $1
+      WHERE token_id = ?
     `;
 
     await runQuery(query, [tokenId]);
@@ -60,7 +60,7 @@ export class RefreshTokenService {
     const query = `
       UPDATE refresh_tokens
       SET is_revoked = TRUE
-      WHERE user_id = $1 AND is_revoked = FALSE
+      WHERE user_id = ? AND is_revoked = FALSE
     `;
 
     await runQuery(query, [userId]);
@@ -78,29 +78,44 @@ export class RefreshTokenService {
   static async getUserActiveTokensCount(userId: string): Promise<number> {
     const query = `
       SELECT COUNT(*) as count FROM refresh_tokens
-      WHERE user_id = $1 AND is_revoked = FALSE AND expires_at > NOW()
+      WHERE user_id = ? AND is_revoked = FALSE AND expires_at > NOW()
     `;
 
     const result = await runQuery(query, [userId]);
-    return parseInt(result.rows[0]?.count || '0');
+    return parseInt((result.rows as any[])[0]?.count || '0');
   }
 
   // Revoke oldest tokens if user has too many active sessions
   static async limitUserSessions(userId: string, maxSessions: number = 5): Promise<void> {
+    // First get the count of active sessions
+    const countQuery = `
+      SELECT COUNT(*) as count FROM refresh_tokens
+      WHERE user_id = ? AND is_revoked = FALSE AND expires_at > NOW()
+    `;
+    
+    const countResult = await runQuery(countQuery, [userId]);
+    const activeCount = parseInt((countResult.rows as any[])[0]?.count || '0');
+    
+    // Only proceed if we have more sessions than the limit
+    if (activeCount <= maxSessions) {
+      return;
+    }
+    
+    const tokensToRevoke = activeCount - maxSessions;
+    
     const query = `
       UPDATE refresh_tokens
       SET is_revoked = TRUE
       WHERE id IN (
-        SELECT id FROM refresh_tokens
-        WHERE user_id = $1 AND is_revoked = FALSE AND expires_at > NOW()
-        ORDER BY created_at ASC
-        LIMIT GREATEST(0, (
-          SELECT COUNT(*) FROM refresh_tokens
-          WHERE user_id = $1 AND is_revoked = FALSE AND expires_at > NOW()
-        ) - $2)
+        SELECT id FROM (
+          SELECT id FROM refresh_tokens
+          WHERE user_id = ? AND is_revoked = FALSE AND expires_at > NOW()
+          ORDER BY created_at ASC
+          LIMIT ?
+        ) t
       )
     `;
 
-    await runQuery(query, [userId, maxSessions]);
+    await runQuery(query, [userId, tokensToRevoke]);
   }
 }

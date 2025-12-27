@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 export interface User {
   id: string;
   name: string;
+  tenant_id: string;
   email: string;
   password_hash: string;
   is_online: boolean;
@@ -22,30 +23,37 @@ export class UserService {
     const hashedPassword = await bcrypt.hash(userData.password, 10);
     
     const query = `
-      INSERT INTO users (name, email, password_hash)
-      VALUES ($1, $2, $3)
-      RETURNING *
+      INSERT INTO users (id, name, email, password_hash)
+      VALUES (UUID(), ?, ?, ?)
     `;
 
-    const result = await runQuery(query, [
+    await runQuery(query, [
       userData.name,
       userData.email,
       hashedPassword
     ]);
 
-    return result.rows[0];
+    // Get the created user
+    const selectQuery = 'SELECT * FROM users WHERE email = ? ORDER BY created_at DESC LIMIT 1';
+    const result = await runQuery(selectQuery, [userData.email]);
+
+    const user = (result.rows as User[])[0];
+    if (!user) {
+      throw new Error('Failed to create user');
+    }
+    return user;
   }
 
   static async findUserByEmail(email: string): Promise<User | null> {
-    const query = 'SELECT * FROM users WHERE email = $1';
+    const query = 'SELECT * FROM users WHERE email = ?';
     const result = await runQuery(query, [email]);
-    return result.rows[0] || null;
+    return (result.rows as User[])[0] || null;
   }
 
   static async findUserById(id: string): Promise<User | null> {
-    const query = 'SELECT * FROM users WHERE id = $1';
+    const query = 'SELECT * FROM users WHERE id = ?';
     const result = await runQuery(query, [id]);
-    return result.rows[0] || null;
+    return (result.rows as User[])[0] || null;
   }
 
   static async verifyPassword(plainPassword: string, hashedPassword: string): Promise<boolean> {
@@ -56,8 +64,8 @@ export class UserService {
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     const query = `
       UPDATE users 
-      SET password_hash = $1
-      WHERE id = $2
+      SET password_hash = ?
+      WHERE id = ?
     `;
     await runQuery(query, [hashedPassword, userId]);
   }
@@ -65,8 +73,8 @@ export class UserService {
   static async updateOnlineStatus(userId: string, isOnline: boolean): Promise<void> {
     const query = `
       UPDATE users 
-      SET is_online = $1, last_seen = NOW()
-      WHERE id = $2
+      SET is_online = ?, last_seen = NOW()
+      WHERE id = ?
     `;
     await runQuery(query, [isOnline, userId]);
   }
@@ -74,18 +82,18 @@ export class UserService {
   static async getOnlineUsers(): Promise<User[]> {
     const query = 'SELECT * FROM users WHERE is_online = TRUE';
     const result = await runQuery(query);
-    return result.rows;
+    return result.rows as User[];
   }
 
   static async searchUsers(searchTerm: string, currentUserId: string): Promise<User[]> {
     const query = `
       SELECT id, name, email, is_online, last_seen
       FROM users 
-      WHERE (name ILIKE $1 OR email ILIKE $1) 
-        AND id != $2
+      WHERE (name LIKE ? OR email LIKE ?) 
+        AND id != ?
       LIMIT 20
     `;
-    const result = await runQuery(query, [`%${searchTerm}%`, currentUserId]);
-    return result.rows;
+    const result = await runQuery(query, [`%${searchTerm}%`, `%${searchTerm}%`, currentUserId]);
+    return result.rows as User[];
   }
 }

@@ -1,11 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import { JWTService } from '../common/jwt.service';
+import { TenantRequest } from './tenant.middleware';
 import sendHTTPResponse from '../common/sendHTTPResponse';
 
-export interface AuthenticatedRequest extends Request {
+export interface AuthenticatedRequest extends TenantRequest {
   user?: {
     userId: string;
     email: string;
+    tenantId: string;
   };
 }
 
@@ -25,7 +27,8 @@ export const authenticateToken = (req: AuthenticatedRequest, res: Response, next
 
   req.user = {
     userId: decoded.userId,
-    email: decoded.email
+    email: decoded.email,
+    tenantId: req.tenant?.tenantId || ''
   };
 
   next();
@@ -51,7 +54,8 @@ export const optionalAuth = (req: AuthenticatedRequest, res: Response, next: Nex
     if (decoded) {
       req.user = {
         userId: decoded.userId,
-        email: decoded.email
+        email: decoded.email,
+        tenantId: req.tenant?.tenantId || ''
       };
     }
   }
