@@ -1,0 +1,89 @@
+import * as jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+
+interface TokenPayload extends jwt.JwtPayload {
+  userId: string;
+  email: string;
+}
+
+interface RefreshTokenPayload extends jwt.JwtPayload {
+  userId: string;
+  tokenId: string;
+}
+
+export class JWTService {
+  private static readonly ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET || 'your-access-secret-key';
+  private static readonly REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key';
+  private static readonly ACCESS_TOKEN_EXPIRY = process.env.JWT_ACCESS_EXPIRY || '15m';
+  private static readonly REFRESH_TOKEN_EXPIRY = process.env.JWT_REFRESH_EXPIRY || '7d';
+
+  static generateAccessToken(payload: Omit<TokenPayload, keyof jwt.JwtPayload>): string {
+    if (!this.ACCESS_TOKEN_SECRET || this.ACCESS_TOKEN_SECRET === '') {
+      throw new Error('JWT_ACCESS_SECRET is not defined');
+    }
+    return (jwt as any).sign(
+      payload, 
+      this.ACCESS_TOKEN_SECRET, 
+      {
+        expiresIn: this.ACCESS_TOKEN_EXPIRY,
+        issuer: 'chat-engine',
+        audience: 'chat-app'
+      }
+    );
+  }
+
+  static generateRefreshToken(userId: string): { token: string; tokenId: string } {
+    const tokenId = crypto.randomUUID();
+
+    const token = (jwt as any).sign(
+      { userId, tokenId },
+      this.REFRESH_TOKEN_SECRET,
+      {
+        expiresIn: this.REFRESH_TOKEN_EXPIRY,
+        issuer: 'chat-engine',
+        audience: 'chat-app'
+      }
+    );
+    return { token, tokenId };
+  }
+
+  static verifyAccessToken(token: string): TokenPayload | null {
+    try {
+      const decoded = jwt.verify(token, this.ACCESS_TOKEN_SECRET, {
+        issuer: 'chat-engine',
+        audience: 'chat-app'
+      }) as TokenPayload;
+      return decoded;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  static verifyRefreshToken(token: string): RefreshTokenPayload | null {
+    try {
+      const decoded = jwt.verify(token, this.REFRESH_TOKEN_SECRET, {
+        issuer: 'chat-engine',
+        audience: 'chat-app'
+      }) as RefreshTokenPayload;
+      return decoded;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  static generateTokenPair(user: { id: string; email: string }) {
+    const accessToken = this.generateAccessToken({
+      userId: user.id,
+      email: user.email
+    });
+
+    const { token: refreshToken, tokenId } = this.generateRefreshToken(user.id);
+
+    return {
+      accessToken,
+      refreshToken,
+      tokenId,
+      expiresIn: this.ACCESS_TOKEN_EXPIRY
+    };
+  }
+}
